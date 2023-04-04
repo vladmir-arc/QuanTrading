@@ -21,7 +21,7 @@ class StockDataSet(data.Dataset):
 
 def split_dataset(dataset):
     # X.shape == (-1, seq_length, input_size), Y.shape == (-1, 1)
-    y = dataset[1:, -1, 0]
+    y = dataset[1:, -1, 0]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0表示"close"
     return dataset[0:-1], torch.unsqueeze(y, dim=1)
 
 
@@ -35,7 +35,7 @@ def load_data(batch_size):
 
 
 stocks: pd.DataFrame | None = pd.read_csv('Database/PetroChina.csv')
-stocks = stocks.loc[:, ["Close", "Volume"]]
+stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume"]]
 
 # 前80%用于训练集，后20%用于测试集
 train_size = int(len(stocks) * 0.8)

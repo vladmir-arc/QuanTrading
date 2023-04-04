@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from Data_Preprocess import load_data
 
 
@@ -19,21 +20,26 @@ class LSTM(nn.Module):
         return out
 
 
-input_size = 2
 output_size = 1
 # 超参数
-hidden_size = 8
+hidden_size = 64
 num_epochs = 100
 learning_rate = 0.01
 batch_size = 15
 
 
 def main():
+    global input_size
     train_iter, test_iter = load_data(batch_size)
+    for X, y in train_iter:
+        input_size = X.shape[2]
+        print("input_size = ", input_size)
+        break
     model = LSTM(input_size, hidden_size, output_size)
     train_lstm(model, train_iter, test_iter, nn.MSELoss(), learning_rate)
 
 
+# 每一个epoch的训练细节
 def train_epoch(net, train_iter, loss, updater, epoch):
     global ls
     for X, y in train_iter:
@@ -60,16 +66,24 @@ def train_lstm(net, train_iter, test_iter, loss, lr):
         # loss.backward()
         # optimizer.step()
 
+    y_list = []
+    y_hat_list = []
+
     # 验证
     net.eval()
     with torch.no_grad():
         for X, y in test_iter:
             y_hat = net(X)
-            # test_predict = scaler.inverse_transform(test_predict.reshape(-1, 1))
-            # y = scaler.inverse_transform(testY.reshape(-1, 1))
-            # rmse = np.sqrt(np.mean(((y_hat - y) ** 2)))
+            y_list += y.tolist()
+            y_hat_list += y_hat.tolist()
             rmse = torch.norm(y_hat-y)
             print('Test RMSE: {:.5f}'.format(rmse))
+
+    # 绘制折线图
+    plt.plot(y_list, label='y')
+    plt.plot(y_hat_list, label='y_hat')
+    plt.legend()
+    plt.show()
 
 
 if __name__ == '__main__':
