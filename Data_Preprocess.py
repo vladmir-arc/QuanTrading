@@ -28,10 +28,11 @@ def split_dataset(dataset):
 
 def load_data(batch_size, seq_length, select_stock='PetroChina'):
     stocks: pd.DataFrame | None = pd.read_csv('Database/'+select_stock+'.csv')
-    stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume"]]
+    stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume",
+                            "D/E", "Profit Margin", "EPS(diluted)", "P/B ratio"]]
 
     # 前80%用于训练集，后20%用于测试集
-    train_size = int(len(stocks) * 0.8)
+    train_size = int(len(stocks) * 0.85)
     test_size = len(stocks) - train_size
     train = stocks.iloc[0:train_size]
     test = stocks.iloc[train_size:len(stocks)].reset_index(drop=True)
