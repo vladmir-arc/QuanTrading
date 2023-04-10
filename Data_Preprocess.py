@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils import data
+from sklearn.preprocessing import MinMaxScaler
 
 
 class StockDataSet(data.Dataset):
@@ -21,9 +22,9 @@ class StockDataSet(data.Dataset):
 
 # 在堆叠的数据中将X和y区分开
 def split_dataset(dataset):
-    # X.shape == (-1, seq_length, input_size), Y.shape == (-1, 1)
-    y = dataset[1:, -1, 0]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0表示"close"
-    return dataset[0:-1], torch.unsqueeze(y, dim=1)
+    # X.shape == (-1, seq_length, input_size), Y.shape == (-1, output_size)
+    y = dataset[1:, -1, [0, 1]]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0--"close"/1--'open'
+    return dataset[0:-1], y
 
 
 def load_data(batch_size, seq_length, select_stock='PetroChina'):
@@ -31,19 +32,22 @@ def load_data(batch_size, seq_length, select_stock='PetroChina'):
     stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume",
                             "D/E", "Profit Margin", "EPS(diluted)", "P/B ratio"]]
 
+    # 添加盈利标签
+    stocks['Label'] = ((stocks['Close'] - stocks['Open']) > 0).astype(int)
+
+    # 归一化
+    scaler = MinMaxScaler()
+    stocks_scaled = pd.DataFrame(scaler.fit_transform(stocks), columns=stocks.columns)
+
     # 前80%用于训练集，后20%用于测试集
     train_size = int(len(stocks) * 0.85)
     test_size = len(stocks) - train_size
-    train = stocks.iloc[0:train_size]
-    test = stocks.iloc[train_size:len(stocks)].reset_index(drop=True)
-
-    # 归一化
-    train_scaled = (train - train.min(axis=0)) / (train.max(axis=0) - train.min(axis=0))
-    test_scaled = (test - test.min(axis=0)) / (test.max(axis=0) - test.min(axis=0))
+    train = stocks_scaled.iloc[0:train_size]
+    test = stocks_scaled.iloc[train_size:len(stocks)].reset_index(drop=True)
 
     # 转换为tensor
-    train_scaled = torch.tensor(np.array(train_scaled), dtype=torch.float32)
-    test_scaled = torch.tensor(np.array(test_scaled), dtype=torch.float32)
+    train_scaled = torch.tensor(np.array(train), dtype=torch.float32)
+    test_scaled = torch.tensor(np.array(test), dtype=torch.float32)
 
     # 滑动堆叠每个时序的数据
     train_stacked = torch.stack([train_scaled[i:i + seq_length] for i in range(len(train_scaled) - seq_length + 1)])
@@ -57,3 +61,6 @@ def load_data(batch_size, seq_length, select_stock='PetroChina'):
 
     return (data.DataLoader(train_dataset, batch_size, shuffle=False, num_workers=0),
             data.DataLoader(test_dataset, batch_size, shuffle=False, num_workers=0))
+
+
+load_data(10, 10, "ShanXiMeiYe")
