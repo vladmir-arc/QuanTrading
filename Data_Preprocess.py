@@ -21,13 +21,16 @@ class StockDataSet(data.Dataset):
 
 
 # 在堆叠的数据中将X和y区分开
-def split_dataset(dataset):
+def split_dataset(dataset, binary=False):
     # X.shape == (-1, seq_length, input_size), Y.shape == (-1, output_size)
-    y = dataset[1:, -1, [0, 1]]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0--"close"/1--'open'
+    if binary:
+        y = dataset[1:, -1, -1].unsqueeze(-1)
+    else:
+        y = dataset[1:, -1, [0, 1]]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0--"close"/1--'open'
     return dataset[0:-1], y
 
 
-def load_data(batch_size, seq_length, select_stock='PetroChina'):
+def load_data(batch_size, seq_length, select_stock='PetroChina', binary=False):
     stocks: pd.DataFrame | None = pd.read_csv('Database/'+select_stock+'.csv')
     stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume",
                             "D/E", "Profit Margin", "EPS(diluted)", "P/B ratio"]]
@@ -53,14 +56,22 @@ def load_data(batch_size, seq_length, select_stock='PetroChina'):
     train_stacked = torch.stack([train_scaled[i:i + seq_length] for i in range(len(train_scaled) - seq_length + 1)])
     test_stacked = torch.stack([test_scaled[i:i + seq_length] for i in range(len(test_scaled) - seq_length + 1)])
 
-    train_X, train_y = split_dataset(train_stacked)
-    test_X, test_y = split_dataset(test_stacked)
+    train_X, train_y = split_dataset(train_stacked, binary)
+    test_X, test_y = split_dataset(test_stacked, binary)
 
     train_dataset = StockDataSet(train_X, train_y)
     test_dataset = StockDataSet(test_X, test_y)
 
-    return (data.DataLoader(train_dataset, batch_size, shuffle=False, num_workers=0),
+    return (data.DataLoader(train_dataset, batch_size, shuffle=True, num_workers=0),
             data.DataLoader(test_dataset, batch_size, shuffle=False, num_workers=0))
 
 
-load_data(10, 10, "ShanXiMeiYe")
+def load_backtest_data(select_stock='PetroChina'):
+    stocks: pd.DataFrame | None = pd.read_csv('Database/' + select_stock + '.csv')
+    stocks = stocks.loc[:, ["Close", "Open"]]
+    train_size = int(len(stocks) * 0.85)
+    test = stocks.iloc[train_size:len(stocks)].reset_index(drop=True)
+    return test
+
+
+load_data(10, 10, "ShanXiMeiYe", binary=True)
