@@ -66,7 +66,7 @@ def train_epoch(net, train_iter, loss, updater, epoch, train_losses, early_stop)
 
 
 # 训练LSTM
-def train_lstm(net, train_iter, test_iter, loss, lr):
+def train_lstm(net, train_iter, loss, lr):
     # criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr)
     early_stopping = EarlyStopping()
@@ -99,9 +99,9 @@ def eval_model(model, test_iter):
         for X, y in test_iter:
             y_hat = model(X)
             y_close_list += y[:, 0].tolist()
-            y_open_list += y[:, 1].tolist()
             y_closehat_list += y_hat[:, 0].tolist()
-            y_openhat_list += y_hat[:, 1].tolist()
+            # y_open_list += y[:, 1].tolist()
+            # y_openhat_list += y_hat[:, 1].tolist()
             rmse = torch.norm(y_hat - y)
             print('Test RMSE: {:.5f}'.format(rmse))
 
@@ -113,14 +113,14 @@ def eval_model(model, test_iter):
     plt.legend()
 
     # 计算准确率
-    win_list = [True if i > j else False for i, j in zip(y_close_list, y_open_list)]
-    win_hat_list = [True if i > j else False for i, j in zip(y_closehat_list, y_openhat_list)]
-    count = sum([1 for i, j in zip(win_list, win_hat_list) if i == j])
-    accuracy = float(count / len(win_list))
-    print('准确率为', accuracy*100, '%')
-    with open('buy_signal.txt', 'w') as f:
-        for x, y in zip(win_list, win_hat_list):
-            f.write(f'{x} {y}\n')
+    # win_list = [True if i > j else False for i, j in zip(y_close_list, y_open_list)]
+    # win_hat_list = [True if i > j else False for i, j in zip(y_closehat_list, y_openhat_list)]
+    # count = sum([1 for i, j in zip(win_list, win_hat_list) if i == j])
+    # accuracy = float(count / len(win_list))
+    # print('准确率为', accuracy*100, '%')
+    # with open('next_predict_signal.txt', 'w') as f:
+    #     for x, y in zip(win_list, win_hat_list):
+    #         f.write(f'{x} {y}\n')
 
 
 def eval_binary_model(model, test_iter):
@@ -134,18 +134,23 @@ def eval_binary_model(model, test_iter):
             binary_pred = (y_hat > 0.5).int().squeeze(-1).tolist()
             win_list += y.squeeze(-1).tolist()
             win_hat_list += binary_pred
-            back_test.update(binary_pred)
+            bt.update(binary_pred)
 
     count = sum([1 for i, j in zip(win_list, win_hat_list) if i == j])
     count_winhat_1 = sum([1 for i in win_hat_list if i == 1.0])
     count_win = sum([1 for i, j in zip(win_list, win_hat_list) if (i==1 and i==j)])
     accuracy = float(count / len(win_list))
-    # precision = float(count_win / count_winhat_1)
+    precision = float(count_win / count_winhat_1)
     print('准确率为', accuracy * 100, '%')
-    # print('精确率为', precision*100, '%')
-    with open('win_signal.txt', 'w') as f:
-        for x, y in zip(win_list, win_hat_list):
-            f.write(f'{x} {y}\n')
+    print('胜率为', precision * 100, '%')
+
+    return win_list, win_hat_list
+
+
+input_size = 0
+output_size = 0
+win_list = []
+win_hat_list = []
 
 
 def main(s_stock: str, load: bool = False, binary: bool = False):
@@ -156,10 +161,10 @@ def main(s_stock: str, load: bool = False, binary: bool = False):
     :param load: 若为真，则加载训练好的模型
     :param binary: 若为真，则选用二分类预测
     """
-    global input_size, output_size
+    global input_size, output_size, win_list, win_hat_list
     train_iter, test_iter = load_data(batch_size, seq_length, s_stock, binary)
 
-    # 获取输入的维度
+    # 获取输入,输出维度
     for X, y in train_iter:
         input_size = X.shape[2]
         output_size = y.shape[1]
@@ -170,10 +175,10 @@ def main(s_stock: str, load: bool = False, binary: bool = False):
     if not load:
         criterion = nn.BCELoss() if binary else nn.MSELoss()
         # 训练模型
-        train_lstm(model, train_iter, test_iter, criterion, learning_rate)
+        train_lstm(model, train_iter, criterion, learning_rate)
         # 验证模型
         if binary:
-            eval_binary_model(model, test_iter)
+            win_list, win_hat_list = eval_binary_model(model, test_iter)
         else:
             eval_model(model, test_iter)
 
@@ -187,16 +192,25 @@ def main(s_stock: str, load: bool = False, binary: bool = False):
         clone = torch.load('Params/'+s_stock+'.pt')
         clone.eval()
         if binary:
-            eval_binary_model(clone, test_iter)
+            win_list, win_hat_list = eval_binary_model(clone, test_iter)
         else:
             eval_model(clone, test_iter)
-            # 添加图标题——当前股票
-            plt.title(s_stock)
-            plt.show()
 
+    with open('Signals/' + s_stock + '_win_signal.txt', 'w') as f:
+        for x, y in zip(win_list, win_hat_list):
+            f.write(f'{x} {y}\n')
+
+    # 添加图标题——当前股票
+    if not binary:
+        plt.title(s_stock)
+        plt.show()
+
+    # 简单回测
     backtest_data = load_backtest_data(s_stock)
-    back_test.back_test(backtest_data, seq_length)
-    back_test.show(s_stock)
+    bt.back_test(backtest_data, seq_length)
+    bt.show(s_stock)
+
+    # cerebro_run(s_stock)
 
 
 # 超参数
@@ -205,7 +219,9 @@ num_epochs = 160
 learning_rate = 0.007
 batch_size = 16
 seq_length = 7
-back_test = BackTest(10000, 0, 1000)
+
+bt = BackTest(10000, 0, 100)
+
 
 if __name__ == '__main__':
     stocks = get_stocks('Database')

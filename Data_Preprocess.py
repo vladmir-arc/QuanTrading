@@ -21,22 +21,32 @@ class StockDataSet(data.Dataset):
 
 
 # 在堆叠的数据中将X和y区分开
-def split_dataset(dataset, binary=False):
+def split_dataset(dataset, binary=False, not_daily=False):
     # X.shape == (-1, seq_length, input_size), Y.shape == (-1, output_size)
     if binary:
         y = dataset[1:, -1, -1].unsqueeze(-1)
     else:
-        y = dataset[1:, -1, [0, 1]]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0--"close"/1--'open'
+        if not_daily:
+            y = dataset[1:, -1, [0]]
+        else:
+            y = dataset[1:, -1, [0, 1]]  # 获取收盘价y, -1表示stacked中的最后一组数据， 0--"close"/1--'open'
     return dataset[0:-1], y
 
 
 def load_data(batch_size, seq_length, select_stock='PetroChina', binary=False):
-    stocks: pd.DataFrame | None = pd.read_csv('Database/'+select_stock+'.csv')
-    stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume",
-                            "D/E", "Profit Margin", "EPS(diluted)", "P/B ratio"]]
+    # 判断股票数据的周期
+    is_week = False if select_stock.find('_') == -1 else True if select_stock.split('_')[1] == 'week' else False
+    is_month = False if select_stock.find('_') == -1 else True if select_stock.split('_')[1] == 'month' else False
 
-    # 添加盈利标签
-    stocks['Label'] = ((stocks['Close'] - stocks['Open']) > 0).astype(int)
+    stocks: pd.DataFrame | None = pd.read_csv('Database/' + select_stock + '.csv')
+    if not is_week:
+        # 选择股票输入维度
+        stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume",
+                                "D/E", "Profit Margin", "EPS(diluted)", "P/B ratio"]]
+        # 添加盈利标签
+        stocks['Label'] = ((stocks['Close'] - stocks['Open']) > 0).astype(int)
+    else:
+        stocks = stocks.loc[:, ["Close", "Open", "High", "Low", "Volume"]]
 
     # 归一化
     scaler = MinMaxScaler()
@@ -56,8 +66,8 @@ def load_data(batch_size, seq_length, select_stock='PetroChina', binary=False):
     train_stacked = torch.stack([train_scaled[i:i + seq_length] for i in range(len(train_scaled) - seq_length + 1)])
     test_stacked = torch.stack([test_scaled[i:i + seq_length] for i in range(len(test_scaled) - seq_length + 1)])
 
-    train_X, train_y = split_dataset(train_stacked, binary)
-    test_X, test_y = split_dataset(test_stacked, binary)
+    train_X, train_y = split_dataset(train_stacked, binary, is_week or is_month)
+    test_X, test_y = split_dataset(test_stacked, binary, is_week or is_month)
 
     train_dataset = StockDataSet(train_X, train_y)
     test_dataset = StockDataSet(test_X, test_y)
@@ -68,9 +78,18 @@ def load_data(batch_size, seq_length, select_stock='PetroChina', binary=False):
 
 def load_backtest_data(select_stock='PetroChina'):
     stocks: pd.DataFrame | None = pd.read_csv('Database/' + select_stock + '.csv')
-    stocks = stocks.loc[:, ["Close", "Open"]]
+    stocks = stocks.loc[:, ["Date", "Close", "Open"]]
     train_size = int(len(stocks) * 0.85)
     test = stocks.iloc[train_size:len(stocks)].reset_index(drop=True)
+    return test
+
+
+def load_backtrader_data(select_stock='PetroChina', seq_length=5):
+    stocks: pd.DataFrame = pd.read_csv('Database/' + select_stock + '.csv')
+    train_size = int(len(stocks) * 0.85)
+    test = stocks.iloc[train_size+seq_length:len(stocks)].reset_index(drop=True)
+    test.index = pd.to_datetime(test.Date)
+    test = test[['Open', 'High', 'Low', 'Close', 'Volume']]
     return test
 
 
