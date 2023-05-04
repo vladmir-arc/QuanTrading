@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Button Redirect</title>
+</head>
+
+<body>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+<h2>Button Redirect Example</h2>
+
+<form action="{{ url_for('index') }}">
+    <button class="button" type="submit">Login</button>
+</form>
+
+<button id="myButton">test</button>
+
+</body>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</html>
