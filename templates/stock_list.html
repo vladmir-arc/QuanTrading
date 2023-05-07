@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>STOCK_LIST</title>
+</head>
+
+<body>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<!--获取股票列表-->
+    {% for i in range(length) %}
+    <div class="parent">
+        <div class="child"> {{ i }} </div>
+        <div class="child"> {{ dict[list[i]][0] }} </div>
+        <div class="child"> {{ dict[list[i]][1] }} </div>
+    </div>
+    {% endfor %}
+
+    <select id="mySelect" multiple>
+        <option value="item1">Item 1</option>
+        <option value="item2">Item 2</option>
+        <option value="item3">Item 3</option>
+    </select>
+    <button onclick="getSelectedItems()">Get Selected Items</button>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

@@ -10,3 +10,13 @@
     margin: 4px 2px;
     cursor: pointer;
 }
+
+.parent {
+    display: flex;
+    justify-content: space-between;
+}
+
+.child {
+    width: 30%;
+    text-align: center;
+}
